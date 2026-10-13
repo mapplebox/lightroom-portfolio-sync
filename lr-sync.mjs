@@ -112,7 +112,7 @@ function extract(asset) {
   const x = p.xmp ?? {};
   const tiff = x.tiff ?? {}, exif = x.exif ?? {}, aux = x.aux ?? {}, dc = x.dc ?? {}, ps = x.photoshop ?? {}, iptc = x.Iptc4xmpCore ?? {};
   const pick = (v) => (typeof v === "string" ? v : v?.["x-default"] ?? (Array.isArray(v) ? v[0] : undefined));
-  const caption = pick(dc.description) ?? pick(dc.title) ?? p.importSource?.originalFileName ?? DEFAULT_ALT;
+  const caption = pick(dc.description) ?? pick(dc.title) ?? DEFAULT_ALT; // no caption: default_alt (or the AI alt text, see below), never the file name
   const loc = [p.location?.city ?? ps.City ?? iptc.Location, p.location?.country ?? ps.Country].filter(Boolean);
   return {
     alt: String(caption).trim(),
@@ -254,7 +254,7 @@ async function main() {
       const hasCaption = meta.alt && meta.alt !== DEFAULT_ALT && !/\.(jpe?g|arw|dng|heic|cr3|nef|raf)$/i.test(meta.alt);
       let cats = [cat];
       const needsCat = g.label === "Work";
-      if ((needsCat || !hasCaption) && cfg.anthropic_key) {
+      if ((needsCat || !hasCaption) && cfg.anthropic_key && !DRY) { // no paid API calls in --dry-run
         state.ai ??= {};
         let t = state.ai[a.id];
         if (!t || t.ver !== ver || !t.categories) {
@@ -289,6 +289,10 @@ async function main() {
   execSync(cfg.build ?? "npx astro build", { cwd: ROOT, stdio: "inherit" }); // must write the site to dist/
   const target = cfg.target; // WARNING: everything in this folder (except .well-known) gets replaced by the new build
   if (!target) throw new Error("set \"target\" (your webroot) in the config first");
+  if (!fs.existsSync(target)) {
+    try { fs.mkdirSync(target, { recursive: true }); log(`created target folder ${target}`); }
+    catch (e) { throw new Error(`target folder ${target} does not exist and cannot be created (${e.code}). Create it and give it to the sync user: sudo mkdir -p ${target} && sudo chown $USER: ${target}`); }
+  }
   const keep = new Set([".well-known"]);
   for (const f of fs.readdirSync(target)) if (!keep.has(f)) fs.rmSync(path.join(target, f), { recursive: true, force: true });
   fs.cpSync(path.join(ROOT, "dist"), target, { recursive: true });

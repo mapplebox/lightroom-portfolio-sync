@@ -41,7 +41,7 @@ openid,AdobeID,lr_partner_apis,lr_partner_rendition_apis,offline_access
 
 ## 2. Install
 
-Put the script into your Astro project:
+Download `lr-sync.mjs` and `lightroom.example.json` from this repo. Put the script into `scripts/` of your Astro project and `lightroom.example.json` directly into the project folder (`your-site/`), the commands below copy it from there:
 
 ```
 your-site/
@@ -71,10 +71,10 @@ The config holds your client secret and the refresh token. Keep it readable only
 | `redirect_uri` | for connect | Your default redirect URI, used by `--auth-url` |
 | `refresh_token` | yes | Written by `--code`, then updated automatically on every run |
 | `album` | no | Album / folder name, default `Portfolio` |
-| `target` | yes | Your webroot. **All its contents except `.well-known` are deleted and replaced by `dist/` on every publish.** Use a dedicated directory. |
-| `build` | no | Build command, default `npx astro build`. Must write to `dist/`. |
+| `target` | yes | Your webroot. **All its contents except `.well-known` are deleted and replaced by `dist/` on every publish.** Use a dedicated directory. If it doesn't exist, the script tries to create it and stops with an error if it can't. |
+| `build` | no | Build command, default `npx astro build`. Must write to `dist/`. If Node comes from nvm, cron won't find `npx`: use the full path, e.g. `/home/deploy/.nvm/versions/node/v22.x.x/bin/npx astro build`, or set `PATH` in the crontab. |
 | `staging` | no | `true` appends an `X-Robots-Tag: noindex` header to `.htaccess` in the target (Apache). Also on automatically if the target path contains `staging`. |
-| `default_alt` | no | Fallback alt text if a photo has no caption, default `Photo` |
+| `default_alt` | no | Alt text for photos without a Lightroom caption or title (unless AI tagging provides one), default `Photo`. The file name is never used. |
 | `anthropic_key` | no | Enables AI tagging. Empty = off |
 | `ai_model` | no | Default `claude-haiku-5-5` |
 | `ai_context` | no | Who the portfolio belongs to, used in the prompt (e.g. `a photographer based in Hamburg`) |
@@ -109,7 +109,7 @@ node scripts/lr-sync.mjs --dry-run   # reads Lightroom, prints the data, writes 
 node scripts/lr-sync.mjs             # downloads, writes JSON, builds, publishes
 ```
 
-Flags: `--force` (re-download and rebuild even without changes), `--dry-run`.
+Flags: `--force` (re-download and rebuild even without changes), `--dry-run` (no downloads, no Claude calls, no build).
 
 ## Organising the album
 
@@ -156,7 +156,7 @@ Pitfalls:
 
 ## AI tagging (optional)
 
-Only runs if `anthropic_key` is set, and only for photos that are in the generic `Work` category or have no caption (Lightroom caption / title). For each such photo, once per Lightroom edit version, the script sends the image plus a prompt to the Claude Messages API (`claude-haiku-5-5` by default, thinking disabled so the token budget goes to the answer) and expects JSON back:
+Only runs if `anthropic_key` is set, never with `--dry-run`, and only for photos that are in the generic `Work` category or have no caption (Lightroom caption / title). For each such photo, once per Lightroom edit version, the script sends the image plus a prompt to the Claude Messages API (`claude-haiku-5-5` by default, thinking disabled so the token budget goes to the answer) and expects JSON back:
 
 ```json
 { "categories": ["portraits", "street"], "alt": "Woman in a red coat crossing a wet street at night", "location": "Tokyo" }
@@ -200,13 +200,19 @@ Other generators (Eleventy, Hugo, Next static export …): read the same JSON, s
 
 ## Run it on a schedule
 
-The user that runs the sync needs write access to the project and the target directory. Don't run it as root.
+The user that runs the sync needs write access to the project and the target directory. Don't run it as root. Create the target folder once and give it to that user (here `deploy`):
+
+```bash
+sudo mkdir -p /var/www/example.com/htdocs && sudo chown deploy: /var/www/example.com/htdocs
+```
 
 **cron** (`crontab -e` as that user). Cron has a short `PATH`, use absolute paths:
 
 ```bash
 */30 * * * * cd /home/deploy/your-site && /usr/bin/node scripts/lr-sync.mjs >> private/lr-sync.log 2>&1
 ```
+
+`command -v node` shows where Node lives. With nvm it's something like `/home/deploy/.nvm/versions/node/v22.x.x/bin/node`. Use that path in the cron line and also in `build` (`/home/deploy/.nvm/versions/node/v22.x.x/bin/npx astro build`), or put `PATH=/home/deploy/.nvm/versions/node/v22.x.x/bin:/usr/bin:/bin` as the first line of the crontab.
 
 **systemd timer** (`/etc/systemd/system/lr-sync.service`):
 
@@ -240,7 +246,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now lr-sync.timer
 journalctl -u lr-sync.service -n 50   # check the last run
 ```
 
-If you build on one machine and host somewhere else, set `target` to a local folder and add an `rsync -a --delete target/ user@host:/var/www/…/` step after the script (e.g. a second `ExecStart=` line).
+If you build on one machine and host somewhere else, set `target` to a local folder and add an `rsync -a --delete target/ user@host:/var/www/example.com/htdocs/` step after the script (e.g. a second `ExecStart=` line).
 
 ## Guide (German)
 

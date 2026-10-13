@@ -1,0 +1,15 @@
+{
+  "client_id": "YOUR_ADOBE_CLIENT_ID",
+  "client_secret": "YOUR_ADOBE_CLIENT_SECRET",
+  "redirect_uri": "https://example.com/lr-connect/",
+  "refresh_token": "filled in automatically by --code",
+  "album": "Portfolio",
+  "target": "/var/www/example.com/htdocs",
+  "build": "npx astro build",
+  "default_alt": "Photo",
+  "anthropic_key": "",
+  "ai_model": "claude-haiku-5-5",
+  "ai_context": "",
+  "ntfy_url": "",
+  "ntfy_token": ""
+}
